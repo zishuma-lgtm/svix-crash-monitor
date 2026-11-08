@@ -181,9 +181,9 @@ def risk_neutral_cdf(surface_slice, rate, n_grid=N_GRID):
     ## above states the formula; `np.gradient(call_grid, grid)` is the slope.
     q_raw = None
     if q_raw is None:
-        raise NotImplementedError(
-            "Compute q_raw in risk_neutral_cdf (see HOMEWORK INSTRUCTIONS at the top of this file)"
-        )
+        risk_free_growth = np.exp(rate * maturity_years)
+        call_slope = np.gradient(call_grid, grid)
+        q_raw = 1.0 + risk_free_growth * call_slope
 
     # A valid CDF is non-decreasing and lives in [0, 1]; the raw one need not be.
     q_fit = np.clip(isotonic_regression(q_raw, increasing=True).x, 0.0, 1.0)
