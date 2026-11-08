@@ -252,6 +252,7 @@ def pull_es_options(start_date=START_DATE, end_date=END_DATE, client=None):
         queries = build_queries(session, next_day)
         frames = {}
         for name, query in queries.items():
+            print(f"Checking Databento cost: {session} {name}", flush=True)
             cost = with_retry(client.metadata.get_cost, **query)
             assert_query_is_free(cost, what=f"({name}, {session})")
             frames[name] = get_range_with_retry(client, query)
