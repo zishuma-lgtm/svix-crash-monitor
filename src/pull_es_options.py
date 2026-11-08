@@ -234,7 +234,7 @@ def get_range_with_retry(client, query):
     return with_retry(client.timeseries.get_range, **query).to_df().reset_index()
 
 
-def pull_es_options(start_date=START_DATE, end_date=END_DATE, client=None):
+def pull_es_options(start_date=START_DATE, end_date=END_DATE, client=None, *, latest=False):
     """Pull settlement prices and contract definitions, one session at a time.
 
     Returns (options, futures): the option settlements joined to their
@@ -251,11 +251,21 @@ def pull_es_options(start_date=START_DATE, end_date=END_DATE, client=None):
         next_day = (pd.Timestamp(session) + pd.DateOffset(days=1)).strftime("%Y-%m-%d")
         queries = build_queries(session, next_day)
         frames = {}
-        for name, query in queries.items():
-            print(f"Checking Databento cost: {session} {name}", flush=True)
-            cost = with_retry(client.metadata.get_cost, **query)
-            assert_query_is_free(cost, what=f"({name}, {session})")
-            frames[name] = get_range_with_retry(client, query)
+        try:
+            for name, query in queries.items():
+                cost = with_retry(client.metadata.get_cost, **query)
+                assert_query_is_free(cost, what=f"({name}, {session})")
+                frames[name] = get_range_with_retry(client, query)
+        except db.common.error.BentoClientError as error:
+            if not (
+                latest
+                and name == "option_statistics"
+                and error.http_status == 422
+                and "symbology_invalid_request" in error.message
+            ):
+                raise
+            print(f"  {session}: option symbols unavailable, skipping this day", flush=True)
+            continue
         settled = final_settlements(frames["option_statistics"])
         contracts = option_contracts(frames["option_definitions"])
         if settled.empty or contracts.empty:
@@ -312,7 +322,7 @@ if __name__ == "__main__":
             "your key (https://databento.com, Account > API keys)."
         )
     start_date, end_date = latest_window() if args.latest else (START_DATE, END_DATE)
-    options, futures = pull_es_options(start_date, end_date)
+    options, futures = pull_es_options(start_date, end_date, latest=args.latest)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     options.to_parquet(DATA_DIR / OPTIONS_PARQUET)
     futures.to_parquet(DATA_DIR / FUTURES_PARQUET)
