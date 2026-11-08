@@ -258,8 +258,7 @@ def pull_es_options(start_date=START_DATE, end_date=END_DATE, client=None, *, la
                 frames[name] = get_range_with_retry(client, query)
         except db.common.error.BentoClientError as error:
             if not (
-                latest
-                and name == "option_statistics"
+                name == "option_statistics"
                 and error.http_status == 422
                 and "symbology_invalid_request" in error.message
             ):
